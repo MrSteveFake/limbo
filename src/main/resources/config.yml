@@ -1,0 +1,25 @@
+# LimboCaptcha Configuration
+# Домен для Google reCaptcha v2
+recaptcha:
+  site-key: "your-site-key"
+  secret-key: "your-secret-key"
+  domain: "https://your-domain.com"
+
+# Limbo сервер для капчи (создается автоматически)
+limbo:
+  name: "captcha"
+  
+# Сообщения
+messages:
+  captcha-title: "&6&lПройдите капчу!"
+  captcha-subtitle: "&eДля продолжения нажмите на ссылку в чате"
+  captcha-chat: 
+    - "&6============================================="
+    - "&e&lПройдите капчу для продолжения!"
+    - "&fСсылка: &b&n%link%"
+    - "&6============================================="
+  captcha-failed: "&cВы не прошли капчу или время истекло!"
+  captcha-success: "&aКапча пройдена успешно!"
+  
+# Таймаут прохождения капчи (в секундах)
+timeout: 120
