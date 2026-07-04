@@ -12,19 +12,21 @@ import net.elytrium.limboapi.api.Limbo;
 import net.elytrium.limboapi.api.LimboFactory;
 import net.elytrium.limboapi.api.chunk.VirtualWorld;
 import net.elytrium.limboapi.api.player.LimboPlayer;
-import net.elytrium.limboauth.LimboAuth;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.entity.UrlEncodedFormEntity;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.http.NameValuePair;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.message.BasicNameValuePair;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 public class CaptchaListener {
@@ -62,15 +64,12 @@ public class CaptchaListener {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
         
-        // Генерируем уникальный токен
         String token = UUID.randomUUID().toString().substring(0, 8);
         pendingCaptcha.put(uuid, token);
         
-        // Создаем ссылку на капчу
         String captchaUrl = "https://" + config.getDomain() + "/captcha?player=" + 
             player.getUsername() + "&token=" + token + "&sitekey=" + config.getSiteKey();
         
-        // Планируем таймаут
         ScheduledFuture timeoutTask = server.getScheduler()
             .buildTask(plugin, () -> handleCaptchaTimeout(player))
             .delay(config.getTimeout(), TimeUnit.SECONDS)
@@ -78,14 +77,12 @@ public class CaptchaListener {
         
         timeoutTasks.put(uuid, timeoutTask);
         
-        // Отправляем в лимбо и показываем сообщения
         server.getScheduler().buildTask(plugin, () -> {
             captchaLimbo.spawnPlayer(player, new net.elytrium.limboapi.api.LimboSessionHandler() {
                 @Override
                 public void onSpawn(LimboPlayer limboPlayer) {
                     limboPlayers.put(uuid, limboPlayer);
                     
-                    // Отправляем тайтлы
                     player.showTitle(net.kyori.adventure.title.Title.title(
                         LegacyComponentSerializer.legacyAmpersand().deserialize(config.getTitle()),
                         LegacyComponentSerializer.legacyAmpersand().deserialize(config.getSubtitle()),
@@ -96,7 +93,6 @@ public class CaptchaListener {
                         )
                     ));
                     
-                    // Отправляем сообщения в чат
                     for (String line : config.getChatMessage()) {
                         String formattedLine = line.replace("%link%", captchaUrl);
                         player.sendMessage(
@@ -119,12 +115,10 @@ public class CaptchaListener {
         UUID uuid = player.getUniqueId();
         
         if (pendingCaptcha.containsKey(uuid)) {
-            // Проверяем, не пытается ли игрок подключиться к серверу авторизации
             RegisteredServer targetServer = event.getOriginalServer();
             RegisteredServer authServer = getAuthServer();
             
             if (authServer != null && targetServer.equals(authServer)) {
-                // Разрешаем подключение к серверу авторизации только после прохождения капчи
                 if (pendingCaptcha.containsKey(uuid)) {
                     event.setResult(ServerPreConnectEvent.ServerResult.denied());
                 }
@@ -142,7 +136,6 @@ public class CaptchaListener {
         String expectedToken = pendingCaptcha.get(uuid);
         
         if (expectedToken.equals(token)) {
-            // Отменяем таймаут
             ScheduledFuture task = timeoutTasks.remove(uuid);
             if (task != null) {
                 task.cancel(false);
@@ -150,21 +143,17 @@ public class CaptchaListener {
             
             pendingCaptcha.remove(uuid);
             
-            // Отправляем сообщение об успехе
             player.sendMessage(
                 LegacyComponentSerializer.legacyAmpersand().deserialize(config.getSuccessMessage())
             );
             
-            // Перемещаем игрока на сервер авторизации
             RegisteredServer authServer = getAuthServer();
             if (authServer != null) {
-                // Сначала убираем из лимбо
                 LimboPlayer limboPlayer = limboPlayers.remove(uuid);
                 if (limboPlayer != null) {
                     captchaLimbo.removePlayer(player);
                 }
                 
-                // Подключаем к серверу авторизации
                 player.createConnectionRequest(authServer).connectWithIndication();
             }
         } else {
@@ -188,13 +177,11 @@ public class CaptchaListener {
     private void handleCaptchaFail(Player player) {
         UUID uuid = player.getUniqueId();
         
-        // Убираем из лимбо
         LimboPlayer limboPlayer = limboPlayers.remove(uuid);
         if (limboPlayer != null) {
             captchaLimbo.removePlayer(player);
         }
         
-        // Кикаем игрока
         Component kickMessage = LegacyComponentSerializer.legacyAmpersand()
             .deserialize(config.getFailedMessage());
         
@@ -202,11 +189,9 @@ public class CaptchaListener {
     }
     
     private RegisteredServer getAuthServer() {
-        // Получаем сервер авторизации из LimboAuth
         Optional<RegisteredServer> authServer = server.getServer("auth");
         
         if (authServer.isEmpty()) {
-            // Пробуем получить первый сервер из конфигурации LimboAuth
             Collection<RegisteredServer> servers = server.getAllServers();
             for (RegisteredServer srv : servers) {
                 if (srv.getServerInfo().getName().toLowerCase().contains("auth")) {
@@ -221,13 +206,13 @@ public class CaptchaListener {
     public boolean verifyCaptcha(String remoteIp, String captchaResponse) {
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpPost post = new HttpPost("https://www.google.com/recaptcha/api/siteverify");
-            post.setHeader("Content-Type", "application/x-www-form-urlencoded");
             
-            String params = "secret=" + config.getSecretKey() + 
-                          "&response=" + captchaResponse + 
-                          "&remoteip=" + remoteIp;
+            List<NameValuePair> params = new ArrayList<>();
+            params.add(new BasicNameValuePair("secret", config.getSecretKey()));
+            params.add(new BasicNameValuePair("response", captchaResponse));
+            params.add(new BasicNameValuePair("remoteip", remoteIp));
             
-            post.setEntity(new StringEntity(params));
+            post.setEntity(new UrlEncodedFormEntity(params));
             
             try (CloseableHttpResponse response = httpClient.execute(post)) {
                 String json = EntityUtils.toString(response.getEntity());
