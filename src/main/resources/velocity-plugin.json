@@ -1,0 +1,18 @@
+{
+  "id": "limbocaptcha",
+  "name": "LimboCaptcha",
+  "version": "1.0.0",
+  "description": "Captcha plugin for LimboAuth",
+  "authors": ["YourName"],
+  "dependencies": [
+    {
+      "id": "limboapi",
+      "optional": false
+    },
+    {
+      "id": "limboauth",
+      "optional": false
+    }
+  ],
+  "main": "ru.limbocaptcha.LimboCaptcha"
+}
